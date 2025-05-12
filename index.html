@@ -143,20 +143,7 @@
       </table>
     </div>
   </div>
-  <div class="flex gap-2 mt-2">
-  <button onclick="startCamera()" class="px-4 py-2 bg-blue-500 text-white rounded">
-    Mulai Kamera
-  </button>
-  <button onclick="captureImage()" class="px-4 py-2 bg-green-500 text-white rounded">
-    Ambil Foto
-  </button>
-  <button onclick="switchCamera()" class="px-4 py-2 bg-yellow-500 text-white rounded">
-    Kamera Depan/Belakang
-  </button>
-  <button onclick="toggleMirror()" class="px-4 py-2 bg-indigo-500 text-white rounded">
-    Flip Mirror
-  </button>
-</div>
+
   <script>
     // Konfigurasi Akun
     const accountMapping = {
@@ -172,33 +159,14 @@
 
     let imgData = null;
 
-    async function startCamera() {
-  const video = document.getElementById("video");
-  
-  try {
-    const constraints = {
-      video: {
-        facingMode: usingFrontCamera ? "user" : "environment",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    };
-    
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    currentStream = stream;
-    
-    // Terapkan mirror jika kamera depan
-    if (usingFrontCamera && mirrorEnabled) {
-      video.style.transform = "scaleX(-1)";
-    } else {
-      video.style.transform = "scaleX(1)";
+    // Fungsi Kamera
+    function startCamera() {
+      const video = document.getElementById("video");
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((stream) => (video.srcObject = stream))
+        .catch((err) => alert("Gagal mengakses kamera: " + err.message));
     }
-  } catch (err) {
-    console.error("Error accessing camera:", err);
-    alert("Gagal mengakses kamera: " + err.message);
-  }
-}
 
     function captureImage() {
       const video = document.getElementById("video");
@@ -224,31 +192,6 @@
       reader.readAsDataURL(file);
     }
 
-    let currentStream = null;
-    let usingFrontCamera = false;
-    let mirrorEnabled = true;
-
-    // Fungsi untuk mengganti kamera
-async function switchCamera() {
-  if (!currentStream) return;
-  
-  // Hentikan stream yang sedang berjalan
-  currentStream.getTracks().forEach(track => track.stop());
-  
-  // Toggle kamera
-  usingFrontCamera = !usingFrontCamera;
-  
-  // Mulai kamera dengan pilihan baru
-  await startCamera();
-}
-
-// Fungsi untuk toggle mirror
-function toggleMirror() {
-  const video = document.getElementById("video");
-  mirrorEnabled = !mirrorEnabled;
-  video.style.transform = mirrorEnabled ? "scaleX(-1)" : "scaleX(1)";
-}
-    
     // Proses OCR
     async function processImage() {
       if (!imgData) {
@@ -519,15 +462,6 @@ function toggleMirror() {
         video.srcObject.getTracks().forEach((track) => track.stop());
         video.srcObject = null;
       }
-
-       if (currentStream) {
-    currentStream.getTracks().forEach(track => track.stop());
-    currentStream = null;
-  }
-  const video = document.getElementById("video");
-  video.style.transform = "scaleX(1)";
-  usingFrontCamera = false;
-  mirrorEnabled = true;
     }
 
     // Removed toggleDarkMode function as dark mode toggle button is removed
