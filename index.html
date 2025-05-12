@@ -35,16 +35,6 @@
       border: 2px solid #e5e7eb;
       margin-top: 1rem;
     }
-
-    #video {
-  transform: scaleX(-1); /* Default untuk kamera belakang */
-  -webkit-transform: scaleX(-1); /* Untuk browser WebKit */
-  transform-origin: center;
-  object-fit: cover;
-  width: 100%;
-  height: auto;
-  display: block;
-}
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4">
@@ -169,64 +159,25 @@
 
     let imgData = null;
 
-   // Fungsi Kamera - Diubah untuk menggunakan kamera belakang
+    // Fungsi Kamera
     function startCamera() {
-  const video = document.getElementById("video");
-  navigator.mediaDevices
-    .getUserMedia({ 
-      video: {
-        facingMode: 'environment' // Prioritaskan kamera belakang
-      } 
-    })
-    .then((stream) => {
-      video.srcObject = stream;
-      
-      // Atur transformasi CSS berdasarkan orientasi kamera
-      video.style.transform = "scaleX(-1)"; // Membalik horizontal untuk kamera belakang
-      video.style.webkitTransform = "scaleX(-1)"; // Untuk browser WebKit
-      
-      // Untuk beberapa perangkat, mungkin perlu rotasi tambahan
-      video.style.transformOrigin = "center";
-      video.style.objectFit = "cover";
-    })
-    .catch((err) => {
-      console.error("Kamera belakang gagal, mencoba kamera depan:", err);
-      // Fallback ke kamera depan
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then((stream) => {
-          video.srcObject = stream;
-          // Reset transform untuk kamera depan
-          video.style.transform = "";
-          video.style.webkitTransform = "";
-        })
+      const video = document.getElementById("video");
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((stream) => (video.srcObject = stream))
         .catch((err) => alert("Gagal mengakses kamera: " + err.message));
-    });
-}
+    }
 
-   function captureImage() {
-  const video = document.getElementById("video");
-  const canvas = document.getElementById("canvas");
-  
-  canvas.classList.remove("hidden");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  
-  const ctx = canvas.getContext("2d");
-  
-  // Atur transformasi canvas berdasarkan kamera yang digunakan
-  if (video.style.transform.includes("scaleX(-1)")) {
-    // Jika kamera belakang (sudah di-flip horizontal)
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-  } else {
-    // Kamera depan (normal)
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  }
-  
-  imgData = canvas.toDataURL("image/png");
-}
+    function captureImage() {
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      canvas.classList.remove("hidden"); // Tampilkan canvas
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      imgData = canvas.toDataURL("image/png");
+      // Do not stop the video stream to allow multiple captures
+    }
 
     // Fungsi Upload Gambar
     function handleUpload(event) {
