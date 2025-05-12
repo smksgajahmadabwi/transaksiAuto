@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMK GAJAH MADA BANYUWANGI - Pencatatan Jurnal Otomatis</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .dark body {
+      background-color: #1f2937;
+      color: #f9fafb;
+    }
+    .dark table {
+      background-color: #374151;
+    }
+    .dark input,
+    .dark select {
+      background-color: #4b5563;
+      color: white;
+    }
+    #loading {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      z-index: 999;
+    }
+    canvas {
+      border: 2px solid #e5e7eb;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+  <div id="loading">Memproses gambar...</div>
+
+  <div class="max-w-5xl mx-auto bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+    <div class="flex flex-col items-center mb-6">
+      <h1 class="text-3xl font-bold text-center">SMK GAJAH MADA BANYUWANGI</h1>
+      <h2 class="text-xl font-semibold text-center mt-2">
+        PENCATATAN TRANSAKSI OTOMATIS BERBASIS KECERDASAN BUATAN
+      </h2>
+      <p class="text-md text-center mt-1">Oleh Siti Mutamimah,S.Ak </p>
+    </div>
+
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-2xl font-bold"></h2>
+      <!-- Dark mode toggle button removed as per user request -->
+    </div>
+
+    <div id="datetime" class="text-right mb-2 text-sm font-semibold"></div>
+
+    <div class="flex flex-col md:flex-row gap-4 mb-4">
+      <div class="flex-1">
+        <video id="video" class="rounded-md border" autoplay></video>
+        <div class="flex gap-2 mt-2">
+          <button onclick="startCamera()" class="px-4 py-2 bg-blue-500 text-white rounded">
+            Mulai Kamera
+          </button>
+          <button onclick="captureImage()" class="px-4 py-2 bg-green-500 text-white rounded">
+            Ambil Foto
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1">
+        <input
+          type="file"
+          accept="image/*"
+          id="uploadImage"
+          onchange="handleUpload(event)"
+          class="mb-2"
+        />
+        <canvas id="canvas" class="hidden"></canvas>
+        <button onclick="processImage()" class="px-4 py-2 bg-purple-500 text-white rounded mb-2">
+          Proses Gambar
+        </button>
+
+        <div class="flex items-center gap-2 mb-2">
+          <label for="tanggalMode" class="text-sm">Format Tanggal:</label>
+          <select id="tanggalMode" onchange="updateDateInput()" class="border rounded p-1">
+            <option value="otomatis">Otomatis</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <input type="date" id="manualDate" class="border rounded p-1 hidden" />
+      </div>
+    </div>
+
+    <h3 class="text-xl font-semibold mt-6 mb-2">Hasil Jurnal:</h3>
+
+    <div class="overflow-x-auto">
+      <table id="jurnalTable" class="w-full text-left border">
+        <thead>
+          <tr class="bg-gray-200 dark:bg-gray-700">
+            <th class="p-2 border">Tanggal</th>
+            <th class="p-2 border">Akun Debit</th>
+            <th class="p-2 border">Akun Kredit</th>
+            <th class="p-2 border">Jumlah (Rp)</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-600"></tbody>
+      </table>
+    </div>
+
+    <div class="mt-4">
+      <p id="totalInfo" class="font-semibold"></p>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mt-4">
+      <input type="file" id="csvFileInput" accept=".csv" class="px-6 py-2 bg-blue-600 text-white rounded cursor-pointer" onchange="openCSV(event)" />
+      <button
+        id="downloadBtn"
+        onclick="downloadCSV()"
+        class="px-6 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+        disabled
+      >
+        Download CSV
+      </button>
+      <button onclick="resetData()" class="px-6 py-2 bg-red-600 text-white rounded">
+        Reset Data
+      </button>
+    </div>
+
+    <h3 class="text-lg font-semibold mt-8 mb-2">Preview CSV:</h3>
+    <div class="overflow-x-auto">
+      <table id="previewTable" class="w-full text-left border">
+        <thead class="bg-gray-200 dark:bg-gray-700">
+          <tr>
+            <th class="p-2 border">Tanggal</th>
+            <th class="p-2 border">Akun Debit</th>
+            <th class="p-2 border">Akun Kredit</th>
+            <th class="p-2 border">Jumlah (Rp)</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-600"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Konfigurasi Akun
+    const accountMapping = {
+      gaj: "Beban Gaji",
+      gajj: "Beban Gaji",
+      perlengkapan: "Perlengkapan",
+      sewa: "Beban Sewa",
+      listrik: "Beban Listrik",
+      telepon: "Beban Telepon",
+      pemeliharaan: "Beban Pemeliharaan",
+      transportasi: "Beban Transportasi",
+    };
+
+    let imgData = null;
+
+    // Fungsi Kamera
+    function startCamera() {
+      const video = document.getElementById("video");
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((stream) => (video.srcObject = stream))
+        .catch((err) => alert("Gagal mengakses kamera: " + err.message));
+    }
+
+    function captureImage() {
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      canvas.classList.remove("hidden"); // Tampilkan canvas
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      imgData = canvas.toDataURL("image/png");
+      // Do not stop the video stream to allow multiple captures
+    }
+
+    // Fungsi Upload Gambar
+    function handleUpload(event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        imgData = e.target.result;
+        // Do not show preview canvas on file upload
+        const canvas = document.getElementById("canvas");
+        canvas.classList.add("hidden");
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Proses OCR
+    async function processImage() {
+      if (!imgData) {
+        alert("Pastikan gambar sudah diambil/diupload!");
+        return;
+      }
+
+      // Validasi base64 image
+      if (!imgData.startsWith("data:image")) {
+        alert("Format gambar tidak valid!");
+        return;
+      }
+
+      // Hide canvas during processing
+      const canvas = document.getElementById("canvas");
+      canvas.classList.add("hidden");
+
+      // Resize image before OCR to max 1024px width or height
+      const resizedImgData = await resizeImage(imgData, 1024);
+
+      try {
+        const {
+          data: { text },
+        } = await Tesseract.recognize(resizedImgData, "eng", {
+          logger: (m) => {
+            const loading = document.getElementById("loading");
+            if (m.status === "recognizing text") {
+              loading.style.display = "block";
+              loading.innerText = `Memproses gambar... ${Math.round(m.progress * 100)}%`;
+            } else {
+              loading.style.display = "none";
+            }
+          },
+        });
+        generateJurnal(text);
+      } catch (error) {
+        console.error("Detail Error:", error);
+        alert("Gagal memproses: " + error.message);
+      } finally {
+        document.getElementById("loading").style.display = "none";
+      }
+    }
+
+    // Helper function to resize image base64 data
+    function resizeImage(dataUrl, maxSize) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            } else {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        img.src = dataUrl;
+      });
+    }
+
+    // Generate Jurnal
+    function generateJurnal(text) {
+      const lines = text.split("\n").filter((line) => line.trim().length > 0);
+      const tbody = document.querySelector("#jurnalTable tbody");
+      // Do not clear tbody to allow multiple entries
+
+      // Ekstraksi Tanggal
+      const extractedDate = extractDateFromText(lines);
+      let today = extractedDate || new Date().toISOString().split("T")[0];
+
+      if (document.getElementById("tanggalMode").value === "manual") {
+        today = document.getElementById("manualDate").value || today;
+      }
+
+      // Ekstraksi Akun Debit
+      const biayaLine = lines.find(
+        (line) =>
+          line.toLowerCase().includes("beban") ||
+          line.toLowerCase().includes("biaya")
+      );
+      let akunDebit = biayaLine ? mapAccount(biayaLine) : "";
+
+      // Ekstraksi Jumlah
+      const amount = extractAmountFromText(lines);
+
+      console.log("Extracted Date:", today);
+      console.log("Extracted Account:", akunDebit);
+      console.log("Extracted Amount:", amount);
+
+      if (amount > 0 && akunDebit) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td contenteditable="true">${today}</td>
+          <td contenteditable="true">${akunDebit}</td>
+          <td contenteditable="true">Kas</td>
+          <td contenteditable="true">${amount.toLocaleString("id-ID")}</td>
+        `;
+        tbody.appendChild(tr);
+      } else {
+        alert("Gagal mengekstrak data penting dari nota");
+        return;
+      }
+      updateTotal();
+    }
+
+    // Fungsi Helper
+    function extractDateFromText(lines) {
+      const datePatterns = [
+        /(\d{1,2} [A-Za-z]{3} \d{4})/,
+        /Tanggal\s*:?\s*(\d{1,2} [A-Za-z]{3} \d{4})/i,
+        /(\d{2}\/\d{2}\/\d{4})/,
+        /(\d{4}-\d{2}-\d{2})/,
+      ];
+
+      for (let line of lines) {
+        for (let pattern of datePatterns) {
+          const match = line.match(pattern);
+          if (match) {
+            try {
+              const dateString = match[1] || match[0];
+              // Replace month names in Indonesian to English for Date parsing
+              const monthMap = {
+                Jan: "Jan",
+                Feb: "Feb",
+                Mar: "Mar",
+                Apr: "Apr",
+                Mei: "May",
+                Jun: "Jun",
+                Jul: "Jul",
+                Agu: "Aug",
+                Sep: "Sep",
+                Okt: "Oct",
+                Nov: "Nov",
+                Des: "Dec",
+              };
+              let dateStr = dateString;
+              for (const [idMonth, enMonth] of Object.entries(monthMap)) {
+                const regex = new RegExp(idMonth, "gi");
+                dateStr = dateStr.replace(regex, enMonth);
+              }
+              const date = new Date(dateStr);
+              if (!isNaN(date)) return date.toISOString().split("T")[0];
+            } catch {
+              continue;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    function mapAccount(line) {
+      const cleanLine = line
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .replace(/j{2,}/g, "j");
+
+      for (const [key, value] of Object.entries(accountMapping)) {
+        if (cleanLine.includes(key)) return value;
+      }
+      return "Beban Lainnya";
+    }
+
+    function extractAmountFromText(lines) {
+      // Preprocess lines to remove spaces inside numbers
+      const processedLines = lines.map(line => line.replace(/(\d)\s+(\d)/g, "$1$2"));
+      // Regex to match numbers with optional dots or commas as thousand separators and optional decimal
+      const amountRegex = /\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{2})?/g;
+      let maxAmount = 0;
+      for (let line of processedLines) {
+        const matches = line.match(amountRegex);
+        if (matches) {
+          for (const match of matches) {
+            let amountStr = match.replace(/\s/g, ""); // remove spaces
+            // Normalize amount string: remove commas or dots as thousand separators, keep decimal dot
+            if (amountStr.indexOf(",") > -1 && amountStr.indexOf(".") > -1) {
+              // If both comma and dot present, assume comma thousand separator, dot decimal
+              amountStr = amountStr.replace(/,/g, "");
+            } else if (amountStr.indexOf(",") > -1) {
+              // If only comma present, assume comma decimal separator, replace with dot
+              amountStr = amountStr.replace(/,/g, ".");
+            }
+            amountStr = amountStr.replace(/\./g, "");
+            const amount = parseFloat(amountStr);
+            if (!isNaN(amount) && amount > maxAmount) maxAmount = amount;
+          }
+        }
+      }
+      return Math.round(maxAmount);
+    }
+
+    // Fungsi Laporan
+    function updateTotal() {
+      let totalDebit = 0,
+        totalKredit = 0;
+      const previewTbody = document.querySelector("#previewTable tbody");
+      previewTbody.innerHTML = "";
+
+      document.querySelectorAll("#jurnalTable tbody tr").forEach((row) => {
+        const cols = row.querySelectorAll("td");
+        const amount = parseFloat(
+          cols[3].innerText.replace(/[^\d]/g, "")
+        ) || 0;
+
+        totalDebit += amount;
+        totalKredit += amount;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = Array.from(cols)
+          .map((td) => `<td class='p-2 border'>${td.innerText}</td>`)
+          .join("");
+        previewTbody.appendChild(tr);
+      });
+
+      document.getElementById(
+        "totalInfo"
+      ).innerText = `Total Debit: Rp ${totalDebit.toLocaleString(
+        "id-ID"
+      )} | Total Kredit: Rp ${totalKredit.toLocaleString("id-ID")}`;
+      document.getElementById("downloadBtn").disabled = totalDebit !== totalKredit || totalDebit === 0;
+    }
+
+    function downloadCSV() {
+      let csv = "Tanggal,Akun Debit,Akun Kredit,Jumlah (Rp)\n";
+      document.querySelectorAll("#jurnalTable tbody tr").forEach((row) => {
+        const cols = row.querySelectorAll("td");
+        csv +=
+          Array.from(cols)
+            .map((td, index) =>
+              index === 3
+                ? parseInt(td.innerText.replace(/[^\d]/g, "")).toLocaleString(
+                    "id-ID"
+                  )
+                : td.innerText
+            )
+            .join(",") + "\n";
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `jurnal_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+    }
+
+    // Fungsi Tambahan
+    function resetData() {
+      document.querySelector("#jurnalTable tbody").innerHTML = "";
+      document.querySelector("#previewTable tbody").innerHTML = "";
+      document.getElementById("totalInfo").innerText = "";
+      document.getElementById("downloadBtn").disabled = true;
+      imgData = null;
+      // Clear image file input value to allow re-upload of same file
+      const imageInput = document.getElementById("uploadImage");
+      if (imageInput) {
+        imageInput.value = "";
+      }
+      const video = document.getElementById("video");
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach((track) => track.stop());
+        video.srcObject = null;
+      }
+    }
+
+    // Removed toggleDarkMode function as dark mode toggle button is removed
+
+    function updateDateTime() {
+      const now = new Date();
+      document.getElementById("datetime").innerText =
+        now.toLocaleDateString("id-ID", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }) +
+        " - " +
+        now.toLocaleTimeString("id-ID");
+    }
+
+    function updateDateInput() {
+      const mode = document.getElementById("tanggalMode").value;
+      const manualDate = document.getElementById("manualDate");
+      if (mode === "manual") {
+        manualDate.classList.remove("hidden");
+      } else {
+        manualDate.classList.add("hidden");
+      }
+    }
+
+    // Inisialisasi
+    setInterval(updateDateTime, 1000);
+    updateDateTime();
+
+    // Add event listener to update total when table content changes
+    document.querySelector("#jurnalTable tbody").addEventListener("input", () => {
+      updateTotal();
+    });
+
+    // Function to open and parse CSV file
+    function openCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const rows = text.trim().split("\n");
+        if (rows.length < 2) {
+          alert("File CSV kosong atau tidak valid");
+          return;
+        }
+
+        // Clear existing data
+        resetData();
+
+        const tbody = document.querySelector("#jurnalTable tbody");
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i].split(",");
+          if (cols.length < 4) continue;
+
+          const tanggal = cols[0].trim();
+          const akunDebit = cols[1].trim();
+          const akunKredit = cols[2].trim();
+          const jumlah = cols[3].trim();
+
+          // Validate jumlah is a number
+          const jumlahNum = parseInt(jumlah.replace(/[^\d]/g, ""));
+          if (isNaN(jumlahNum)) continue;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td contenteditable="true">${tanggal}</td>
+            <td contenteditable="true">${akunDebit}</td>
+            <td contenteditable="true">${akunKredit}</td>
+            <td contenteditable="true">${jumlahNum.toLocaleString("id-ID")}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+        updateTotal();
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
