@@ -161,28 +161,37 @@
 
    // Fungsi Kamera - Diubah untuk menggunakan kamera belakang
     function startCamera() {
-      const video = document.getElementById("video");
-      navigator.mediaDevices
-        .getUserMedia({ 
-          video: {
-            facingMode: 'environment' // Ini akan memprioritaskan kamera belakang
-          } 
-        })
+  const video = document.getElementById("video");
+  navigator.mediaDevices
+    .getUserMedia({ 
+      video: {
+        facingMode: 'environment' // Prioritaskan kamera belakang
+      } 
+    })
+    .then((stream) => {
+      video.srcObject = stream;
+      
+      // Atur transformasi CSS berdasarkan orientasi kamera
+      video.style.transform = "scaleX(-1)"; // Membalik horizontal untuk kamera belakang
+      video.style.webkitTransform = "scaleX(-1)"; // Untuk browser WebKit
+      
+      // Untuk beberapa perangkat, mungkin perlu rotasi tambahan
+      video.style.transformOrigin = "center";
+      video.style.objectFit = "cover";
+    })
+    .catch((err) => {
+      console.error("Kamera belakang gagal, mencoba kamera depan:", err);
+      // Fallback ke kamera depan
+      navigator.mediaDevices.getUserMedia({ video: true })
         .then((stream) => {
           video.srcObject = stream;
-          // Putar video jika orientasi landscape
-          video.style.transform = "scaleX(-1)"; // Membalik horizontal agar tidak mirror
+          // Reset transform untuk kamera depan
+          video.style.transform = "";
+          video.style.webkitTransform = "";
         })
-        .catch((err) => {
-          // Jika kamera belakang tidak tersedia, coba kamera depan
-          navigator.mediaDevices.getUserMedia({ video: true })
-            .then((stream) => {
-              video.srcObject = stream;
-              video.style.transform = ""; // Reset transform untuk kamera depan
-            })
-            .catch((err) => alert("Gagal mengakses kamera: " + err.message));
-        });
-    }
+        .catch((err) => alert("Gagal mengakses kamera: " + err.message));
+    });
+}
 
     function captureImage() {
       const video = document.getElementById("video");
