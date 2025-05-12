@@ -159,13 +159,29 @@
 
     let imgData = null;
 
-    // Fungsi Kamera
+   // Fungsi Kamera - Diubah untuk menggunakan kamera belakang
     function startCamera() {
       const video = document.getElementById("video");
       navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then((stream) => (video.srcObject = stream))
-        .catch((err) => alert("Gagal mengakses kamera: " + err.message));
+        .getUserMedia({ 
+          video: {
+            facingMode: 'environment' // Ini akan memprioritaskan kamera belakang
+          } 
+        })
+        .then((stream) => {
+          video.srcObject = stream;
+          // Putar video jika orientasi landscape
+          video.style.transform = "scaleX(-1)"; // Membalik horizontal agar tidak mirror
+        })
+        .catch((err) => {
+          // Jika kamera belakang tidak tersedia, coba kamera depan
+          navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+              video.srcObject = stream;
+              video.style.transform = ""; // Reset transform untuk kamera depan
+            })
+            .catch((err) => alert("Gagal mengakses kamera: " + err.message));
+        });
     }
 
     function captureImage() {
