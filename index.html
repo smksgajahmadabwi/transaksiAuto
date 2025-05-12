@@ -35,6 +35,10 @@
       border: 2px solid #e5e7eb;
       margin-top: 1rem;
     }
+    /* Mirror effect for video and canvas */
+    .mirrored {
+      transform: scaleX(-1);
+    }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4">
@@ -59,12 +63,18 @@
     <div class="flex flex-col md:flex-row gap-4 mb-4">
       <div class="flex-1">
         <video id="video" class="rounded-md border" autoplay></video>
-        <div class="flex gap-2 mt-2">
-          <button onclick="startCamera()" class="px-4 py-2 bg-blue-500 text-white rounded">
+        <div class="flex gap-2 mt-2 flex-wrap">
+          <button onclick="startCamera(currentFacingMode)" class="px-4 py-2 bg-blue-500 text-white rounded">
             Mulai Kamera
           </button>
           <button onclick="captureImage()" class="px-4 py-2 bg-green-500 text-white rounded">
             Ambil Foto
+          </button>
+          <button onclick="toggleCamera()" class="px-4 py-2 bg-yellow-500 text-black rounded">
+            Kamera Depan/Belakang
+          </button>
+          <button onclick="toggleMirror()" class="px-4 py-2 bg-indigo-500 text-white rounded">
+            Toggle Mirror
           </button>
         </div>
       </div>
@@ -158,14 +168,69 @@
     };
 
     let imgData = null;
+    let currentFacingMode = "environment"; // default to back camera
+    let isMirrored = false;
+    let currentStream = null;
 
     // Fungsi Kamera
-    function startCamera() {
+    async function startCamera(facingMode) {
       const video = document.getElementById("video");
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then((stream) => (video.srcObject = stream))
-        .catch((err) => alert("Gagal mengakses kamera: " + err.message));
+      if (currentStream) {
+        // Stop all tracks of the existing stream before starting new
+        currentStream.getTracks().forEach((track) => track.stop());
+      }
+      try {
+        const constraints = {
+          video: { facingMode: { exact: facingMode } },
+          audio: false,
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        video.srcObject = stream;
+        updateVideoMirror();
+      } catch (err) {
+        // If exact facingMode fails, try without exact constraint (fallback)
+        try {
+          const constraintsFallback = {
+            video: { facingMode: facingMode },
+            audio: false,
+          };
+          const stream = await navigator.mediaDevices.getUserMedia(constraintsFallback);
+          currentStream = stream;
+          video.srcObject = stream;
+          updateVideoMirror();
+        } catch (err2) {
+          alert("Gagal mengakses kamera: " + err2.message);
+        }
+      }
+    }
+
+    function toggleCamera() {
+      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+      startCamera(currentFacingMode);
+    }
+
+    function toggleMirror() {
+      isMirrored = !isMirrored;
+      updateVideoMirror();
+      // Also update canvas mirror if visible
+      const canvas = document.getElementById("canvas");
+      if (!canvas.classList.contains("hidden")) {
+        if (isMirrored) {
+          canvas.classList.add("mirrored");
+        } else {
+          canvas.classList.remove("mirrored");
+        }
+      }
+    }
+
+    function updateVideoMirror() {
+      const video = document.getElementById("video");
+      if (isMirrored) {
+        video.classList.add("mirrored");
+      } else {
+        video.classList.remove("mirrored");
+      }
     }
 
     function captureImage() {
@@ -174,7 +239,15 @@
       canvas.classList.remove("hidden"); // Tampilkan canvas
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      canvas.getContext("2d").drawImage(video, 0, 0);
+      const ctx = canvas.getContext("2d");
+      if (isMirrored) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0);
+      if (isMirrored) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+      }
       imgData = canvas.toDataURL("image/png");
       // Do not stop the video stream to allow multiple captures
     }
